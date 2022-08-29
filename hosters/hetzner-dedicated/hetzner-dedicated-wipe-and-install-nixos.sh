@@ -35,6 +35,16 @@ set -o pipefail
 
 set -x
 
+# [root@hetzner:~]# ls -la /dev/nvme*
+# crw------- 1 root root 249, 0 Aug 25 08:58 /dev/nvme0
+# brw-rw---- 1 root disk 259, 0 Aug 25 08:58 /dev/nvme0n1
+# brw-rw---- 1 root disk 259, 1 Aug 25 08:58 /dev/nvme0n1p1
+# brw-rw---- 1 root disk 259, 2 Aug 25 08:58 /dev/nvme0n1p2
+# crw------- 1 root root 249, 1 Aug 25 08:58 /dev/nvme1
+# brw-rw---- 1 root disk 259, 3 Aug 25 08:58 /dev/nvme1n1
+# brw-rw---- 1 root disk 259, 4 Aug 25 08:58 /dev/nvme1n1p1
+# brw-rw---- 1 root disk 259, 5 Aug 25 08:58 /dev/nvme1n1p2
+
 # Inspect existing disks
 lsblk
 
@@ -64,8 +74,8 @@ ARRAY <ignore> UUID=00000000:00000000:00000000:00000000' > /etc/mdadm/mdadm.conf
 echo -e "#! /usr/bin/env bash\nset -e\n" 'parted $@ 2> parted-stderr.txt || grep "unable to inform the kernel of the change" parted-stderr.txt && echo "This is expected, continuing" || echo >&2 "Parted failed; stderr: $(< parted-stderr.txt)"' > parted-ignoring-partprobe-error.sh && chmod +x parted-ignoring-partprobe-error.sh
 
 # Create partition tables (--script to not ask)
-./parted-ignoring-partprobe-error.sh --script /dev/sda mklabel gpt
-./parted-ignoring-partprobe-error.sh --script /dev/sdb mklabel gpt
+./parted-ignoring-partprobe-error.sh --script /dev/nvme0n1 mklabel gpt
+./parted-ignoring-partprobe-error.sh --script /dev/nvme1n1 mklabel gpt
 
 # Create partitions (--script to not ask)
 #
@@ -82,21 +92,21 @@ echo -e "#! /usr/bin/env bash\nset -e\n" 'parted $@ 2> parted-stderr.txt || grep
 #   ... part-type is one of 'primary', 'extended' or 'logical', and may be specified only with 'msdos' or 'dvh' partition tables.
 #   A name must be specified for a 'gpt' partition table.
 # GPT partition names are limited to 36 UTF-16 chars, see https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_entries_(LBA_2-33).
-./parted-ignoring-partprobe-error.sh --script --align optimal /dev/sda -- mklabel gpt mkpart 'BIOS-boot-partition' 1MB 2MB set 1 bios_grub on mkpart 'data-partition' 2MB '100%'
-./parted-ignoring-partprobe-error.sh --script --align optimal /dev/sdb -- mklabel gpt mkpart 'BIOS-boot-partition' 1MB 2MB set 1 bios_grub on mkpart 'data-partition' 2MB '100%'
+./parted-ignoring-partprobe-error.sh --script --align optimal /dev/nvme0n1 -- mklabel gpt mkpart 'BIOS-boot-partition' 1MB 2MB set 1 bios_grub on mkpart 'data-partition' 2MB '100%'
+./parted-ignoring-partprobe-error.sh --script --align optimal /dev/nvme1n1 -- mklabel gpt mkpart 'BIOS-boot-partition' 1MB 2MB set 1 bios_grub on mkpart 'data-partition' 2MB '100%'
 
 # Reload partitions
 partprobe
 
 # Wait for all devices to exist
-udevadm settle --timeout=5 --exit-if-exists=/dev/sda1
-udevadm settle --timeout=5 --exit-if-exists=/dev/sda2
-udevadm settle --timeout=5 --exit-if-exists=/dev/sdb1
-udevadm settle --timeout=5 --exit-if-exists=/dev/sdb2
+udevadm settle --timeout=5 --exit-if-exists=/dev/nvme0n1p1
+udevadm settle --timeout=5 --exit-if-exists=/dev/nvme0n1p2
+udevadm settle --timeout=5 --exit-if-exists=/dev/nvme1n1p1
+udevadm settle --timeout=5 --exit-if-exists=/dev/nvme1n1p2
 
 # Wipe any previous RAID signatures
-mdadm --zero-superblock --force /dev/sda2
-mdadm --zero-superblock --force /dev/sdb2
+mdadm --zero-superblock --force /dev/nvme0n1p2
+mdadm --zero-superblock --force /dev/nvme1n1p2
 
 # Create RAIDs
 # Note that during creating and boot-time assembly, mdadm cares about the
@@ -108,7 +118,7 @@ mdadm --zero-superblock --force /dev/sdb2
 # Almost all details of this are explained in
 #   https://bugzilla.redhat.com/show_bug.cgi?id=606481#c14
 # and the followup comments by Doug Ledford.
-mdadm --create --run --verbose /dev/md0 --level=1 --raid-devices=2 --homehost=hetzner --name=root0 /dev/sda2 /dev/sdb2
+mdadm --create --run --verbose /dev/md0 --level=1 --raid-devices=2 --homehost=hetzner --name=root0 /dev/nvme0n1p2 /dev/nvme1n1p2
 
 # Assembling the RAID can result in auto-activation of previously-existing LVM
 # groups, preventing the RAID block device wiping below with
@@ -165,7 +175,7 @@ set +u +x # sourcing this may refer to unset variables that we have no control o
 set -u -x
 
 # FIXME Keep in sync with `system.stateVersion` set below!
-nix-channel --add https://nixos.org/channels/nixos-20.03 nixpkgs
+nix-channel --add https://nixos.org/channels/nixos-22.05 nixpkgs
 nix-channel --update
 
 # Getting NixOS installation tools
@@ -219,7 +229,7 @@ cat > /mnt/etc/nixos/configuration.nix <<EOF
   boot.loader.grub = {
     enable = true;
     efiSupport = false;
-    devices = [ "/dev/sda" "/dev/sdb" ];
+    devices = [ "/dev/nvme0n1" "/dev/nvme1n1" ];
   };
 
   networking.hostName = "hetzner";
@@ -273,7 +283,7 @@ cat > /mnt/etc/nixos/configuration.nix <<EOF
 
   users.users.root.openssh.authorizedKeys.keys = [
     # FIXME Replace this by your SSH pubkey!
-    "ssh-rsa AAAAAAAAAAA..."
+    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1/MyEUYMxQu6UDN0E4Zm5ntBmrPvf2v/97FEV9K3qhKLEvEav2qLsKnleiahtuWcxcYBrCYDaC1WEvIyCS12gagck/P1tgZixKSOB7f8831ltdytcH9FmoLZ0jUcuNP5cAvSQxI+pX5sQBOKpPI8xcc1fcLtryPQLDyZb6Q00olRJfYjfjnwSzOWgLLEGQCaVLKVTkDRPWbCvMZaPht9c4SKPuKHigWK0dPDZPurRCny7ELPYasvT5fCoo/YzvM7ycb57adJEyvfR/qENmmt0HdG7UXGseCK2Yj1C7mOZg6M2xgtLoLxTSV56O/7+nnZlBOnLdY0WlurvXrWA96qUSfmcwuwGOvAq6aT+0L6jiqaroBQVoOMCr9XMIrVjiyOBP5LBiYtOqQXYX9UUS+irRGDbAXluHZtgyERl32dPIAlbb6qE4NAXndAJ5vWj6q/ogsyufNKYiHzI6H7n0+d4FDXu1R49sqQg7OituejMx6wzbv4M2ZuLAQYf8yhhGHU= ivan@Ivans-MacBook-Pro.local"
   ];
 
   services.openssh.enable = true;
@@ -283,14 +293,15 @@ cat > /mnt/etc/nixos/configuration.nix <<EOF
   # compatible, in order to avoid breaking some software such as database
   # servers. You should change this only after NixOS release notes say you
   # should.
-  system.stateVersion = "20.03"; # Did you read the comment?
+  system.stateVersion = "22.05"; # Did you read the comment?
 
 }
 EOF
 
 # Install NixOS
+export NIX_PATH="$HOME/.nix-defexpr/channels/nixpkgs"
 PATH="$PATH" NIX_PATH="$NIX_PATH" `which nixos-install` --no-root-passwd --root /mnt --max-jobs 40
 
-umount /mnt
-
-reboot
+# umount /mnt
+#
+# reboot
