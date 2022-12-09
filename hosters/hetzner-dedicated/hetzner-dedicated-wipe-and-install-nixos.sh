@@ -67,11 +67,11 @@ mdadm --stop --scan
 # We use `>` because the file may already contain some detected RAID arrays,
 # which would take precedence over our `<ignore>`.
 echo 'AUTO -all
-ARRAY <ignore> UUID=00000000:00000000:00000000:00000000' > /etc/mdadm/mdadm.conf
+ARRAY <ignore> UUID=00000000:00000000:00000000:00000000' >/etc/mdadm/mdadm.conf
 
 # Create wrapper for parted >= 3.3 that does not exit 1 when it cannot inform
 # the kernel of partitions changing (we use partprobe for that).
-echo -e "#! /usr/bin/env bash\nset -e\n" 'parted $@ 2> parted-stderr.txt || grep "unable to inform the kernel of the change" parted-stderr.txt && echo "This is expected, continuing" || echo >&2 "Parted failed; stderr: $(< parted-stderr.txt)"' > parted-ignoring-partprobe-error.sh && chmod +x parted-ignoring-partprobe-error.sh
+echo -e "#! /usr/bin/env bash\nset -e\n" 'parted $@ 2> parted-stderr.txt || grep "unable to inform the kernel of the change" parted-stderr.txt && echo "This is expected, continuing" || echo >&2 "Parted failed; stderr: $(< parted-stderr.txt)"' >parted-ignoring-partprobe-error.sh && chmod +x parted-ignoring-partprobe-error.sh
 
 # Create partition tables (--script to not ask)
 ./parted-ignoring-partprobe-error.sh --script /dev/nvme0n1 mklabel gpt
@@ -132,7 +132,7 @@ wipefs -a /dev/md0
 
 # Disable RAID recovery. We don't want this to slow down machine provisioning
 # in the rescue mode. It can run in normal operation after reboot.
-echo 0 > /proc/sys/dev/raid/speed_limit_max
+echo 0 >/proc/sys/dev/raid/speed_limit_max
 
 # LVM
 # PVs
@@ -140,7 +140,7 @@ pvcreate /dev/md0
 # VGs
 vgcreate vg0 /dev/md0
 # LVs (--yes to automatically wipe detected file system signatures)
-lvcreate --yes --extents 95%FREE -n root0 vg0  # 5% slack space
+lvcreate --yes --extents 95%FREE -n root0 vg0 # 5% slack space
 
 # Filesystems (-F to not ask on preexisting FS)
 mkfs.ext4 -F -L root /dev/mapper/vg0-root0
@@ -167,7 +167,7 @@ apt-get install -y sudo
 # Allow installing nix as root, see
 #   https://github.com/NixOS/nix/issues/936#issuecomment-475795730
 mkdir -p /etc/nix
-echo "build-users-group =" > /etc/nix/nix.conf
+echo "build-users-group =" >/etc/nix/nix.conf
 
 curl -L https://nixos.org/nix/install | sh
 set +u +x # sourcing this may refer to unset variables that we have no control over
@@ -207,14 +207,13 @@ echo "Determined IP_V4 as $IP_V4"
 IP_V6="$(ip route get 2001:4860:4860:0:0:0:0:8888 | head -1 | cut -d' ' -f7 | cut -d: -f1-4)::1"
 echo "Determined IP_V6 as $IP_V6"
 
-
 # From https://stackoverflow.com/questions/1204629/how-do-i-get-the-default-gateway-in-linux-given-the-destination/15973156#15973156
-read _ _ DEFAULT_GATEWAY _ < <(ip route list match 0/0); echo "$DEFAULT_GATEWAY"
+read _ _ DEFAULT_GATEWAY _ < <(ip route list match 0/0)
+echo "$DEFAULT_GATEWAY"
 echo "Determined DEFAULT_GATEWAY as $DEFAULT_GATEWAY"
 
-
 # Generate `configuration.nix`. Note that we splice in shell variables.
-cat > /mnt/etc/nixos/configuration.nix <<EOF
+cat >/mnt/etc/nixos/configuration.nix <<EOF
 { config, pkgs, ... }:
 
 {
@@ -300,7 +299,7 @@ EOF
 
 # Install NixOS
 export NIX_PATH="$HOME/.nix-defexpr/channels/nixpkgs"
-PATH="$PATH" NIX_PATH="$NIX_PATH" `which nixos-install` --no-root-passwd --root /mnt --max-jobs 40
+PATH="$PATH" NIX_PATH="$NIX_PATH" $(which nixos-install) --no-root-passwd --root /mnt --max-jobs 40
 
 # umount /mnt
 #
