@@ -24,7 +24,6 @@
 #   being able to login without any authentication.
 # * The script reboots at the end.
 
-
 # Default options
 RAIDLEVEL=1
 HOSTNAME='hetzner'
@@ -71,7 +70,7 @@ mdadm --stop --scan
 # We use `>` because the file may already contain some detected RAID arrays,
 # which would take precedence over our `<ignore>`.
 echo 'AUTO -all
-ARRAY <ignore> UUID=00000000:00000000:00000000:00000000' > /etc/mdadm/mdadm.conf
+ARRAY <ignore> UUID=00000000:00000000:00000000:00000000' >/etc/mdadm/mdadm.conf
 
 # Create partition tables (--script to not ask)
 for disk in "${DISKS[@]}"; do
@@ -95,10 +94,10 @@ done
 # GPT partition names are limited to 36 UTF-16 chars, see https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_entries_(LBA_2-33).
 for disk in "${DISKS[@]}"; do
   parted --script --align optimal "/dev/$disk" -- \
-         mklabel gpt \
-         mkpart 'BIOS-boot-partition' 1MB 2MB \
-         set 1 bios_grub on \
-         mkpart 'data-partition' 2MB '100%'
+    mklabel gpt \
+    mkpart 'BIOS-boot-partition' 1MB 2MB \
+    set 1 bios_grub on \
+    mkpart 'data-partition' 2MB '100%'
 done
 
 # Relaod partitions
@@ -112,7 +111,6 @@ for disk in "${DISKS[@]}"; do
   # Wipe any previous RAID signatures
   mdadm --zero-superblock --force "$(partname "$disk" 2)"
 done
-
 
 # Create RAIDs
 # Note that during creating and boot-time assembly, mdadm cares about the
@@ -128,12 +126,12 @@ done
 # An array of all partitions in the RAID
 declare -a RAIDPARTS
 for disk in "${DISKS[@]}"; do
-  RAIDPARTS+=( "$(partname "$disk" 2)" )
+  RAIDPARTS+=("$(partname "$disk" 2)")
 done
 
 # shellcheck disable=SC2046
 mdadm --create --run --verbose /dev/md0 --level="$RAIDLEVEL" --raid-devices="${#DISKS[@]}" \
-      --homehost="$HOSTNAME" --name=root0 "${RAIDPARTS[@]}"
+  --homehost="$HOSTNAME" --name=root0 "${RAIDPARTS[@]}"
 
 # Assembling the RAID can result in auto-activation of previously-existing LVM
 # groups, preventing the RAID block device wiping below with
@@ -147,7 +145,7 @@ wipefs -a /dev/md0
 
 # Disable RAID recovery. We don't want this to slow down machine provisioning
 # in the rescue mode. It can run in normal operation after reboot.
-echo 0 > /proc/sys/dev/raid/speed_limit_max
+echo 0 >/proc/sys/dev/raid/speed_limit_max
 
 # LVM
 # PVs
@@ -155,7 +153,7 @@ pvcreate /dev/md0
 # VGs
 vgcreate vg0 /dev/md0
 # LVs (--yes to automatically wipe detected file system signatures)
-lvcreate --yes --extents 95%FREE -n root0 vg0  # 5% slack space
+lvcreate --yes --extents 95%FREE -n root0 vg0 # 5% slack space
 
 # Filesystems (-F to not ask on preexisting FS)
 mkfs.ext4 -F -L root /dev/mapper/vg0-root0
@@ -179,13 +177,13 @@ mount /dev/disk/by-label/root /mnt
 # Allow installing nix as root, see
 #   https://github.com/NixOS/nix/issues/936#issuecomment-475795730
 mkdir -p /etc/nix
-echo "build-users-group =" > /etc/nix/nix.conf
-echo "experimental-features = nix-command" >> /etc/nix/nix.conf
+echo "build-users-group =" >/etc/nix/nix.conf
+echo "experimental-features = nix-command" >>/etc/nix/nix.conf
 
 # curl -L https://nixos.org/nix/install | sh
 sh <(curl -L https://github.com/numtide/nix-unstable-installer/releases/download/nix-2.8.0pre20220408_a52e369/install)
 set +u +x # sourcing this may refer to unset variables that we have no control over
-  # shellcheck disable=SC1090
+# shellcheck disable=SC1090
 . "$HOME"/.nix-profile/etc/profile.d/nix.sh
 set -u -x
 
@@ -228,7 +226,8 @@ read -r MAC <"/sys/class/net/$RESCUE_INTERFACE/address"
 echo "Determined MAC as $MAC"
 
 # From https://stackoverflow.com/questions/1204629/how-do-i-get-the-default-gateway-in-linux-given-the-destination/15973156#15973156
-read -r _ _ DEFAULT_GATEWAY _ < <(ip route list match 0/0); echo "$DEFAULT_GATEWAY"
+read -r _ _ DEFAULT_GATEWAY _ < <(ip route list match 0/0)
+echo "$DEFAULT_GATEWAY"
 echo "Determined DEFAULT_GATEWAY as $DEFAULT_GATEWAY"
 
 NET_IFACE="$NIXOS_INTERFACE"
@@ -249,7 +248,7 @@ if [[ $NETWORK_BRIDGE == "1" ]]; then
 fi
 
 # Generate `configuration.nix`. Note that we splice in shell variables.
-cat >| /mnt/etc/nixos/configuration.nix <<EOF
+cat >|/mnt/etc/nixos/configuration.nix <<EOF
 { config, pkgs, ... }:
 
 {
