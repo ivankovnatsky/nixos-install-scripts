@@ -29,67 +29,10 @@
 RAIDLEVEL=1
 HOSTNAME='hetzner'
 NETWORK_BRIDGE=0
-
-# Default SSH key
-SSH_PUBKEY="$(xargs < <(find "$HOME/.ssh" -name '*.pub' -exec cat {} \; -quit))"
+VERBOSE=1
 
 # Strict mode
 set -euo pipefail
-
-# Parameter parsing
-while true; do
-  case "$1" in
-    # Construct RAID in striped mode rather than mirror
-    --raid0)
-      RAIDLEVEL=0
-      shift
-      ;;
-
-    # Configure a network bridge and enslave the primary NIC
-    --bridge)
-      NETWORK_BRIDGE=1
-      shift
-      ;;
-
-    # Configure a known hostname
-    --hostname)
-      HOSTNAME="$2"
-      shift 2
-      ;;
-
-    # Provide the path to an SSH public key file to use for the root user
-    --pubkey)
-      SSH_PUBKEY="$(xargs < "$2")"
-      shift 2
-      ;;
-
-    # Print shell statements
-    --verbose|-v)
-      VERBOSE=1
-      shift
-      ;;
-
-    # Print usage information
-    --help|-h)
-      cat <<-EOF
-				usage: ssh root@<hostname> bash -s < $0 [options]
-
-				OPTIONS
-						--raid0                   Construct the root RAID array in striped mode rather than mirrored mode
-						--bridge                  Provision a network bridge and enslave the primary NIC to it
-						--hostname HOSTNAME       Set a known hostname, used for both the host and the madm RAID
-						--pubkey FILE             Provide the path to a file containing an SSH public key to be provisioned to the root user
-						--verbose|-h              Enable shell command tracing
-				EOF
-      ;;
-
-    # Stop parsing option on first unknown parameter
-    *)
-      break
-  esac
-done
-
-[[ -n $VERBOSE ]] && set -x
 
 # Install dependencies
 apt-get install -y sudo
@@ -237,16 +180,18 @@ mount /dev/disk/by-label/root /mnt
 #   https://github.com/NixOS/nix/issues/936#issuecomment-475795730
 mkdir -p /etc/nix
 echo "build-users-group =" > /etc/nix/nix.conf
+echo "experimental-features = nix-command" >> /etc/nix/nix.conf
 
-curl -L https://nixos.org/nix/install | sh
+# curl -L https://nixos.org/nix/install | sh
+sh <(curl -L https://github.com/numtide/nix-unstable-installer/releases/download/nix-2.8.0pre20220408_a52e369/install)
 set +u +x # sourcing this may refer to unset variables that we have no control over
   # shellcheck disable=SC1090
 . "$HOME"/.nix-profile/etc/profile.d/nix.sh
 set -u -x
 
 # Keep in sync with `system.stateVersion` set below!
-# nix-channel --add https://nixos.org/channels/nixos-20.03 nixpkgs
-nix-channel --add https://nixos.org/channels/nixos-20.03 nixpkgs
+# nix-channel --add https://nixos.org/channels/nixos-22.05 nixpkgs
+nix-channel --add https://nixos.org/channels/nixos-22.05 nixpkgs
 nix-channel --update
 
 # Getting NixOS installation tools
@@ -349,7 +294,6 @@ cat >| /mnt/etc/nixos/configuration.nix <<EOF
   networking.interfaces."$NET_IFACE" = {
     ipv4 = {
       addresses = [{
-        # Server main IPv4 address
         address = "$IP_V4";
         prefixLength = 24;
       }];
@@ -377,7 +321,7 @@ cat >| /mnt/etc/nixos/configuration.nix <<EOF
         via = "fe80::1";
       }];
     };
-  }
+  };
 
   networking = {
     nameservers = [ "8.8.8.8" "8.8.4.4" ];
@@ -393,18 +337,19 @@ cat >| /mnt/etc/nixos/configuration.nix <<EOF
   services.openssh.enable = true;
 
   users.users.root.openssh.authorizedKeys.keys = [
-    "$(echo "$SSH_PUBKEY" | xargs)"
+    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1/MyEUYMxQu6UDN0E4Zm5ntBmrPvf2v/97FEV9K3qhKLEvEav2qLsKnleiahtuWcxcYBrCYDaC1WEvIyCS12gagck/P1tgZixKSOB7f8831ltdytcH9FmoLZ0jUcuNP5cAvSQxI+pX5sQBOKpPI8xcc1fcLtryPQLDyZb6Q00olRJfYjfjnwSzOWgLLEGQCaVLKVTkDRPWbCvMZaPht9c4SKPuKHigWK0dPDZPurRCny7ELPYasvT5fCoo/YzvM7ycb57adJEyvfR/qENmmt0HdG7UXGseCK2Yj1C7mOZg6M2xgtLoLxTSV56O/7+nnZlBOnLdY0WlurvXrWA96qUSfmcwuwGOvAq6aT+0L6jiqaroBQVoOMCr9XMIrVjiyOBP5LBiYtOqQXYX9UUS+irRGDbAXluHZtgyERl32dPIAlbb6qE4NAXndAJ5vWj6q/ogsyufNKYiHzI6H7n0+d4FDXu1R49sqQg7OituejMx6wzbv4M2ZuLAQYf8yhhGHU= ivan@Ivans-MacBook-Pro.local"
   ];
 
   # This value determines the NixOS release with which your system is to be
   # compatible, in order to avoid breaking some software such as database
   # servers. You should change this only after NixOS release notes say you
   # should.
-  system.stateVersion = "20.03"; # Did you read the comment?
+  system.stateVersion = "22.05"; # Did you read the comment?
 }
 EOF
 
 # Install NixOS
+export NIX_PATH="$HOME/.nix-defexpr/channels/nixpkgs"
 PATH="$PATH" NIX_PATH="$NIX_PATH" "$(command -v nixos-install)" --no-root-passwd --root /mnt --max-jobs "$(nproc)"
 
 umount /mnt
