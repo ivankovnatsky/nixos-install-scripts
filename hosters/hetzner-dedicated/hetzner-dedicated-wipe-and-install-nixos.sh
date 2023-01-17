@@ -188,8 +188,8 @@ set +u +x # sourcing this may refer to unset variables that we have no control o
 set -u -x
 
 # Keep in sync with `system.stateVersion` set below!
-# nix-channel --add https://nixos.org/channels/nixos-22.05 nixpkgs
-nix-channel --add https://nixos.org/channels/nixos-22.05 nixpkgs
+# nix-channel --add https://nixos.org/channels/nixos-22.11 nixpkgs
+nix-channel --add https://nixos.org/channels/nixos-22.11 nixpkgs
 nix-channel --update
 
 # Getting NixOS installation tools
@@ -336,14 +336,14 @@ cat >|/mnt/etc/nixos/configuration.nix <<EOF
   services.openssh.enable = true;
 
   users.users.root.openssh.authorizedKeys.keys = [
-    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1/MyEUYMxQu6UDN0E4Zm5ntBmrPvf2v/97FEV9K3qhKLEvEav2qLsKnleiahtuWcxcYBrCYDaC1WEvIyCS12gagck/P1tgZixKSOB7f8831ltdytcH9FmoLZ0jUcuNP5cAvSQxI+pX5sQBOKpPI8xcc1fcLtryPQLDyZb6Q00olRJfYjfjnwSzOWgLLEGQCaVLKVTkDRPWbCvMZaPht9c4SKPuKHigWK0dPDZPurRCny7ELPYasvT5fCoo/YzvM7ycb57adJEyvfR/qENmmt0HdG7UXGseCK2Yj1C7mOZg6M2xgtLoLxTSV56O/7+nnZlBOnLdY0WlurvXrWA96qUSfmcwuwGOvAq6aT+0L6jiqaroBQVoOMCr9XMIrVjiyOBP5LBiYtOqQXYX9UUS+irRGDbAXluHZtgyERl32dPIAlbb6qE4NAXndAJ5vWj6q/ogsyufNKYiHzI6H7n0+d4FDXu1R49sqQg7OituejMx6wzbv4M2ZuLAQYf8yhhGHU= ivan@Ivans-MacBook-Pro.local"
+    "[REDACTED]"
   ];
 
   # This value determines the NixOS release with which your system is to be
   # compatible, in order to avoid breaking some software such as database
   # servers. You should change this only after NixOS release notes say you
   # should.
-  system.stateVersion = "22.05"; # Did you read the comment?
+  system.stateVersion = "22.11"; # Did you read the comment?
 }
 EOF
 
